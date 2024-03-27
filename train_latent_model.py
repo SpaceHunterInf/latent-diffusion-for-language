@@ -10,7 +10,7 @@ import sys
 from utils import file_utils
 from latent_models.latent_finetuning import Trainer
 
-import argparse
+import argparse, wandb
 
 def main(args):
     
@@ -92,6 +92,12 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    os.environ["WANDB_API_KEY"] = 'd2897fab8b1ef5d7affd6fc9f1295f37d78c891f'
+
+    wandb.init(
+        project=os.getenv("WANDB_PROJECT", "train_latent_model"),
+        name=args.wandb_name if len(args.wandb_name) > 0 else args.data_name,
+    )
     if args.eval or args.resume_training:
         with open(os.path.join(args.resume_dir, 'args.json'), 'rt') as f:
             saved_args = json.load(f)
