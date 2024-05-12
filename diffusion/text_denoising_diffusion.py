@@ -1157,6 +1157,7 @@ class Trainer(object):
                 for grad_accum_step in range(self.gradient_accumulate_every):
                     data = next(self.data_iter).to(device)
                     with torch.no_grad():
+                        #breakpoint()
                         encoder_outputs = self.bart_model.get_encoder()(input_ids = data['input_ids'], attention_mask = data['attention_mask'])
                         if self.using_latent_model:
                             latent = self.bart_model.get_diffusion_latent(encoder_outputs, data['attention_mask'])      
@@ -1197,6 +1198,7 @@ class Trainer(object):
                     if self.decoding_loss:
                         raise NotImplementedError
                     else:
+                        #breakpoint()
                         loss = self.diffusion(latent, mask, class_id=(data['label'] if self.class_conditional else None), seq2seq_cond=seq2seq_cond, seq2seq_mask=seq2seq_mask)
                         loss = loss / self.gradient_accumulate_every
                         total_loss += loss.item()

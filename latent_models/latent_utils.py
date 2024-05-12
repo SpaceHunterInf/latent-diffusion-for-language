@@ -1,4 +1,4 @@
-import re
+import re, os
 from transformers import AutoTokenizer, PreTrainedTokenizerBase, T5ForConditionalGeneration, AutoModelForCausalLM, MBartTokenizerFast, MT5ForConditionalGeneration
 from transformers.models.bart.modeling_bart import BartForConditionalGeneration
 from transformers.models.mbart.modeling_mbart import MBartForConditionalGeneration
@@ -33,6 +33,13 @@ def get_latent_model(args):
                 args.enc_dec_model, config=config, num_encoder_latents=args.num_encoder_latents, num_decoder_latents=args.num_decoder_latents, dim_ae=args.dim_ae, num_layers=args.num_layers, l2_normalize_latents=args.l2_normalize_latents, _fast_init=False)
             tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(
                 args.enc_dec_model)
+            
+            if 'delibot' in args.dataset_name:
+                new_tokens = ['[PICK]', '[EMPTY_SENTENCE]', '[FINISHED]']
+                tokenizer.add_tokens(new_tokens)
+                lm.resize_token_embeddings(len(tokenizer))
+                tokenizer.save_pretrained(os.path.join('datasets', args.dataset_name, 'tokenizer'))
+
     else:
         print("Unsupported model")
         raise NotImplementedError

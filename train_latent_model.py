@@ -28,6 +28,7 @@ def main(args):
         eval_every = args.eval_every,
         results_folder = args.output_dir,
         mixed_precision=args.mixed_precision,
+        early_stopping_patience=args.early_stopping_patience
     )
 
     if args.resume_dir:
@@ -90,6 +91,7 @@ if __name__ == "__main__":
     parser.add_argument("--resume_training", action="store_true", default=False)
     parser.add_argument("--resume_dir", type=str, default=None)
 
+    parser.add_argument("--early_stopping_patience", type=int, default=-1, help="Number of validation epochs before early stopping, -1 means off")
     args = parser.parse_args()
 
     os.environ["WANDB_API_KEY"] = 'd2897fab8b1ef5d7affd6fc9f1295f37d78c891f'

@@ -34,6 +34,14 @@ def get_dataset(dataset_name, metadata=False, synthetic_train_path=None):
         qqp_data_path = 'datasets/qqp'
         dataset = load_dataset("text", data_files={f'{split}': os.path.join(qqp_data_path, f'{split}.jsonl') for split in ['train', 'valid', 'test']})
         dataset = process_qqp_dataset(dataset)
+    elif dataset_name == 'delibot':
+        delibot_data_path = 'datasets/delibot' 
+        dataset = load_dataset("text", data_files={f'{split}': os.path.join(delibot_data_path, f'{split}.jsonl') for split in ['train', 'valid', 'test']})
+        dataset = process_delibot_dataset(dataset)
+    elif 'utt' in dataset_name:
+        delibot_data_path = 'datasets/' + dataset_name
+        dataset = load_dataset("text", data_files={f'{split}': os.path.join(delibot_data_path, f'{split}.jsonl') for split in ['train', 'valid', 'test']})
+        dataset = process_utt_dataset(dataset)
     elif dataset_name == 'wmt14-de-en':
         dataset = load_dataset('wmt14', 'de-en')
         dataset['valid'] = dataset['validation']
@@ -100,6 +108,34 @@ def process_qqp_dataset(dataset):
     dataset = dataset.shuffle(seed=42)
     return dataset
 
+def process_delibot_dataset(dataset):
+    def process_delibot_text(example):
+        dict_example = json.loads(example['text'])
+        dict_example['text'] = dict_example['trg']
+        dict_example['context'] = dict_example['src']
+        key_list = list(dict_example.keys())
+        for k in key_list:
+            if k != 'text' and k != 'context':
+                del dict_example[k]
+        return dict_example
+    dataset = dataset.map(process_delibot_text, )
+    dataset = dataset.shuffle(seed=42)
+    return dataset
+
+def process_utt_dataset(dataset):
+    def process_utt_text(example):
+        dict_example = json.loads(example['text'])
+        dict_example['text'] = dict_example['trg']
+        dict_example['context'] = dict_example['src']
+        key_list = list(dict_example.keys())
+        for k in key_list:
+            if k != 'text' and k != 'context':
+                del dict_example[k]
+        return dict_example
+    dataset = dataset.map(process_utt_text, )
+    dataset = dataset.shuffle(seed=42)
+    return dataset   
+
 def process_wmt14_dataset(dataset, lang_pair):
     def process_wmt14_text(example, lang_pair):
         source, target = lang_pair.split('-')
@@ -121,13 +157,13 @@ def parse_metadata(metadata):
 def get_dataloader(args, dataset, model_config, tokenizer, max_seq_len, mode='diffusion', shuffle=True, context_tokenizer=None):
     def tokenization(example):
         # print('EXAMPLE: ', example)
-        if mode == 'diffusion' and args.dataset_name in {'xsum', 'qqp',  'wmt14-en-de', 'wmt14-de-en'}:
+        if mode == 'diffusion' and (args.dataset_name in {'xsum', 'qqp', 'delibot', 'wmt14-en-de', 'wmt14-de-en'} or 'utt' in args.dataset_name):
             # import pdb; pdb.set_trace()
             assert context_tokenizer is not None
             source = example['context']
             target = example['text']
 
-            if args.dataset_name in {'qqp', 'wmt14-en-de', 'wmt14-de-en'}:
+            if args.dataset_name in {'qqp', 'delibot', 'wmt14-en-de', 'wmt14-de-en', 'roc_utt_small'}:
                 cond_inputs = context_tokenizer(source, padding="max_length", truncation=True, max_length=max_seq_len)
             elif args.dataset_name in {'xsum',}:
                 cond_inputs = context_tokenizer(source, padding="max_length", truncation=True, max_length=max_seq_len*4)
@@ -154,7 +190,7 @@ def get_dataloader(args, dataset, model_config, tokenizer, max_seq_len, mode='di
     else:
         raise NotImplementedError
     
-    if args.dataset_name in {'xsum', 'qqp'} or 'wmt14' in args.dataset_name:
+    if args.dataset_name in {'xsum', 'qqp', 'delibot'} or ('wmt14' in args.dataset_name or 'utt' in args.dataset_name):
         dataset = dataset.map(tokenization, remove_columns=['text', 'context'], batched=True, num_proc=None)
     else:
         dataset = dataset.map(tokenization, remove_columns='text')

@@ -154,7 +154,7 @@ class PerceiverAttention(nn.Module):
 
         sim = einsum('... i d, ... j d  -> ... i j',
                      self.query_norm(q) * self.scale, self.key_norm(k))
-
+        #breakpoint()
         if exists(mask):
             max_neg_value = -torch.finfo(sim.dtype).max
             mask = F.pad(mask, (0, latents.shape[-2]), value=True)

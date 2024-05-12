@@ -98,6 +98,7 @@ class Trainer(object):
         eval_every = 1000,
         results_folder = './results',
         mixed_precision = 'no',
+        early_stopping_patience = -1, #if not -1, we have early stopping
         seed=43,
     ):
         super().__init__()
@@ -119,6 +120,7 @@ class Trainer(object):
         )
         self.num_devices = self.accelerator.num_processes
         args.num_devices = self.num_devices
+        self.early_stopping_patience = early_stopping_patience
 
         if self.accelerator.is_main_process:
             if args.output_dir is None:
@@ -232,6 +234,9 @@ class Trainer(object):
         ref_text = []
         accelerator = self.accelerator
         device = self.accelerator.device
+        
+        total_validation_loss = 0
+        counter = 0
         for batch in tqdm(self.val_dataloader):
             for strategy in generate_kwargs.keys():
                 gen_kwargs = generate_kwargs[strategy]
@@ -241,12 +246,25 @@ class Trainer(object):
                 if self.num_devices > 1:
                     encoder_outputs = self.lm.module.get_encoder()(input_ids = data['input_ids'], attention_mask = data['attention_mask'])
                     encoder_outputs = self.lm.module.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
+                    
+                    loss = self.lm(labels=data['labels'], encoder_outputs=encoder_outputs).loss
+                    total_validation_loss += loss.item()
+                    counter += 1 
+                    
                     sample_ids = self.lm.module.generate(encoder_outputs=encoder_outputs, **gen_kwargs)
                 else:
                     encoder_outputs = self.lm.get_encoder()(input_ids = data['input_ids'], attention_mask = data['attention_mask'])
                     encoder_outputs = self.lm.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
+                    
+                    #breakpoint()
+                    loss = self.lm(labels=data['labels'], encoder_outputs=encoder_outputs).loss
+                    total_validation_loss += loss.item()
+                    counter += 1
                     sample_ids = self.lm.generate(encoder_outputs=encoder_outputs, **gen_kwargs)
-                # Pad sample_ids to max_seq_len
+                
+                
+                
+                # Pad sample_ids to max_seq_len 
                 sample_ids = F.pad(sample_ids, (0, self.max_seq_len - sample_ids.shape[-1]), value=self.tokenizer.pad_token_id)
                 gathered_sample_ids = accelerator.gather(sample_ids).to('cpu')
                 texts_list = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=True).strip() for g in gathered_sample_ids]
@@ -310,6 +328,7 @@ class Trainer(object):
             data.append(row)
         table = wandb.Table(columns=columns, data=data)
         accelerator.log({f"Samples": table}, self.step)
+        return total_validation_loss/counter
 
 
     def train(self):
@@ -320,10 +339,14 @@ class Trainer(object):
             encoder_context = torch.no_grad()
         else:
             encoder_context = nullcontext()
-
-        with tqdm(initial = self.step, total = self.train_num_steps, disable = not accelerator.is_main_process) as pbar:
-
-            while self.step < self.train_num_steps:
+        
+        early_stopping_flag = False
+        if self.early_stopping_patience != -1:
+            early_stopping_counter = 0
+            lowest_val_loss = None
+            
+        with tqdm(initial = self.step, total = self.train_num_steps, disable = not accelerator.is_main_process) as pbar: 
+            while self.step < self.train_num_steps and (not early_stopping_flag):
 
                 total_loss = 0.
 
@@ -340,7 +363,8 @@ class Trainer(object):
                     else:
                         encoder_outputs = self.lm.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
 
-                    loss = self.lm(labels=data['labels'], encoder_outputs=encoder_outputs).loss     
+                    loss = self.lm(labels=data['labels'], encoder_outputs=encoder_outputs).loss    
+                #breakpoint() 
                 total_loss += loss.item()
 
                 self.accelerator.backward(loss)
@@ -391,7 +415,33 @@ class Trainer(object):
                     accelerator.log(logs, step=self.step)
 
                 if self.step % self.eval_every == 0:
-                    self.validation()
+                    val_loss = self.validation()
+                    if self.early_stopping_patience != -1:
+                        if lowest_val_loss == None:
+                            lowest_val_loss = val_loss
+                        else:    
+                            if val_loss < lowest_val_loss:
+                                lowest_val_loss = val_loss
+                                early_stopping_counter = 0
+                                
+                                accelerator.wait_for_everyone()
+                                data = {
+                                'step': self.step,
+                                'model': self.accelerator.get_state_dict(self.lm),
+                                'opt': self.opt.state_dict(),
+                                'scaler': self.accelerator.scaler.state_dict() if exists(self.accelerator.scaler) else None
+                                }
+
+                                torch.save(data, str(self.results_folder / f'best_model.pt'))
+                                
+                            else:
+                                early_stopping_counter += 1
+                            
+                            if early_stopping_counter >= self.early_stopping_patience:
+                                early_stopping_flag = True
+                    
+                    print('check out here')
+                    print(val_loss, lowest_val_loss, early_stopping_counter)
                     accelerator.wait_for_everyone()
                     self.save()
                     self.lm.train() 
@@ -401,3 +451,5 @@ class Trainer(object):
         self.save()
 
         accelerator.print('training complete')
+        if early_stopping_flag == True:
+            accelerator.print('early stopped at step {}'.format(self.step))

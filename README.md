@@ -26,6 +26,7 @@ Diffusion models have achieved great success in modeling continuous data modalit
 ## Environment
 A suitable environment can be created with the following commands. 
 ```bash
+pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1 --extra-index-url https://download.pytorch.org/whl/cu113
 conda env create -f environment.yml
 python -m spacy download en_core_web_sm
 ```

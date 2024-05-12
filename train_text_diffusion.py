@@ -5,6 +5,7 @@ import json
 import os
 import numpy as np
 import torch
+import wandb
 
 import CONSTANTS
 from diffusion.text_denoising_diffusion import GaussianDiffusion, Trainer
@@ -47,7 +48,7 @@ def main(args):
         class_conditional= args.class_conditional,
         num_classes= (CONSTANTS.NUM_CLASSES[args.dataset_name] if args.class_conditional else 0),
         class_unconditional_prob= args.class_unconditional_prob,
-        seq2seq=(args.dataset_name in {'xsum', 'qqp', 'qg', 'wmt14-de-en', 'wmt14-en-de'}),
+        seq2seq=(args.dataset_name in {'xsum', 'qqp', 'qg', 'delibot', 'wmt14-de-en', 'wmt14-en-de'}),
         seq2seq_context_dim=lm_dim, 
         num_dense_connections=args.num_dense_connections,
     ).cuda()
@@ -94,7 +95,7 @@ def main(args):
     if args.eval:
         trainer.load(args.resume_dir, best=trainer.diffusion.diffusion_model.seq2seq)
         if trainer.diffusion.diffusion_model.seq2seq:
-            trainer.sample_seq2seq(cls_free_guidance=2.0, incremental=False)
+            trainer.sample_seq2seq(cls_free_guidance=2.0) #, incremental=False)
         else:
             trainer.sample()
         if args.class_conditional:
@@ -105,7 +106,7 @@ def main(args):
         trainer.load(args.resume_dir, best=trainer.diffusion.diffusion_model.seq2seq)
         if trainer.diffusion.diffusion_model.seq2seq:
             # trainer.sample_seq2seq(split='test', incremental=False)
-            trainer.sample_seq2seq(split='test', cls_free_guidance=2.0, incremental=False)
+            trainer.sample_seq2seq(split='test', cls_free_guidance=2.0) #, incremental=False)
         else:
             for seed in [42, 43, 44, 45, 46]:
                 trainer.dataset = trainer.dataset.shuffle(seed)
@@ -232,6 +233,12 @@ if __name__ == "__main__":
     parser.add_argument("--init_path", type=str, default=None)
     
     args = parser.parse_args()
+    os.environ["WANDB_API_KEY"] = 'd2897fab8b1ef5d7affd6fc9f1295f37d78c891f'
+
+    wandb.init(
+        project=os.getenv("WANDB_PROJECT", "train_text_diffusion"),
+        name=args.wandb_name if len(args.wandb_name) > 0 else args.data_name,
+    )
     assert not (args.eval and args.resume_training)
     if args.eval or args.resume_training:
         assert args.resume_dir is not None
