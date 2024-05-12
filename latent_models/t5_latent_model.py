@@ -10,12 +10,13 @@ from einops import rearrange
 
 
 class T5ForConditionalGenerationLatent(T5ForConditionalGeneration):
-    def __init__(self, config, num_encoder_latents, num_decoder_latents, dim_ae, num_layers=2, l2_normalize_latents=False):
+    def __init__(self, config, num_encoder_latents, num_decoder_latents, dim_ae, num_layers=2, l2_normalize_latents=False, max_seq_len=64):
         super().__init__(config)
         self.num_encoder_latents = num_encoder_latents
         self.dim_ae = dim_ae
         self.l2_normalize_latents = l2_normalize_latents
-        self.perceiver_ae = PerceiverAutoEncoder(dim_lm=config.d_model, num_encoder_latents=num_encoder_latents, num_decoder_latents=num_decoder_latents, dim_ae=dim_ae, depth=num_layers, transformer_decoder=True, l2_normalize_latents=l2_normalize_latents)
+        self.perceiver_ae = PerceiverAutoEncoder(dim_lm=config.d_model, num_encoder_latents=num_encoder_latents, num_decoder_latents=num_decoder_latents, dim_ae=dim_ae, depth=num_layers, 
+                                                 transformer_decoder=True, l2_normalize_latents=l2_normalize_latents, max_seq_len=max_seq_len)
 
     def get_diffusion_latent(self, encoder_outputs, attention_mask):
         hidden_state = encoder_outputs[0]

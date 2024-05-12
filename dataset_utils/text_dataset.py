@@ -163,7 +163,7 @@ def get_dataloader(args, dataset, model_config, tokenizer, max_seq_len, mode='di
             source = example['context']
             target = example['text']
 
-            if args.dataset_name in {'qqp', 'delibot', 'wmt14-en-de', 'wmt14-de-en', 'roc_utt_small'}:
+            if args.dataset_name in {'qqp', 'delibot', 'wmt14-en-de', 'wmt14-de-en', 'roc_utt_small'} or 'utt' in args.dataset_name:
                 cond_inputs = context_tokenizer(source, padding="max_length", truncation=True, max_length=max_seq_len)
             elif args.dataset_name in {'xsum',}:
                 cond_inputs = context_tokenizer(source, padding="max_length", truncation=True, max_length=max_seq_len*4)
