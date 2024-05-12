@@ -36,7 +36,10 @@ def get_latent_model(args):
                 args.enc_dec_model)
             
             if 'delibot' in args.dataset_name:
-                new_tokens = ['[PICK]', '[UTT_BREAK]', '[FINISHED]', '<', '[USER_SYS]'] + ['[USER_{}]'.format(str(i)) for i in range(6)]
+                if 'utt' in args.dataset_name:
+                    new_tokens = ['[PICK]', '[FINISHED]', '<', '[USER_SYS]'] + ['[USER_{}]'.format(str(i)) for i in range(6)]
+                else:
+                    new_tokens = ['[PICK]', '[UTT_BREAK]', '[FINISHED]', '<', '[USER_SYS]'] + ['[USER_{}]'.format(str(i)) for i in range(6)]
                 tokenizer.add_tokens(new_tokens)
                 lm.resize_token_embeddings(len(tokenizer))
                 tokenizer.save_pretrained(os.path.join('datasets', args.dataset_name, 'tokenizer'))
