@@ -59,10 +59,9 @@ module load rhel8/default-amp              # REQUIRED - loads the basic environm
 
 #! Insert additional module load commands after this line if needed:
 eval "$(conda shell.bash hook)"
-conda activate dialogue_simulator
+conda activate latent-diff
 #! Full path to application executable:
-application="python train_latent_model.py --dataset_name utt_delibot_full --enc_dec_model google/flan-t5-base --learning_rate 1e-4 --lr_warmup_steps 10 --train_batch_size 64 --num_encoder_latents 32 --dim_ae 64 --num_decoder_latents 32  --eval_every 1000 --num_layers 3 --wandb_name flan-t5-roc-utt-10K-earlystop-1-l2norm-test-32-64 --l2_normalize_latent --num_train_steps 10000 --early_stopping_patience 2 --max_seq_len 256"
-
+application="python train_latent_model.py --dataset_name utt_delibot_full --enc_dec_model google/flan-t5-base --learning_rate 1e-4 --lr_warmup_steps 1000 --train_batch_size 256 --num_encoder_latents 64 --dim_ae 64 --num_decoder_latents 64  --eval_every 1000 --num_layers 3 --wandb_name flan-t5-utt-delibot-full-50K-earlystop-5-l2norm-test-64-64 --l2_normalize_latent --num_train_steps 10000 --early_stopping_patience 5 --max_seq_len 256"
 #! Run options for the application:
 options=""
 
