@@ -29,20 +29,30 @@ def get_latent_model(args):
         else:
             config = T5ForConditionalGeneration.from_pretrained(
                 args.enc_dec_model).config
-            lm = T5ForConditionalGenerationLatent.from_pretrained(
-                args.enc_dec_model, config=config, num_encoder_latents=args.num_encoder_latents, num_decoder_latents=args.num_decoder_latents, dim_ae=args.dim_ae, num_layers=args.num_layers,
-                l2_normalize_latents=args.l2_normalize_latents, _fast_init=False, max_seq_len=args.max_seq_len)
             tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(
                 args.enc_dec_model)
             
+            if args.direct_connection:
+                print('Using traditional encoder decoder')
+                lm = T5ForConditionalGeneration.from_pretrained(args.enc_dec_model)
+            else:
+                lm = T5ForConditionalGenerationLatent.from_pretrained(
+                    args.enc_dec_model, config=config, num_encoder_latents=args.num_encoder_latents, num_decoder_latents=args.num_decoder_latents, dim_ae=args.dim_ae, num_layers=args.num_layers,
+                    l2_normalize_latents=args.l2_normalize_latents, _fast_init=False, max_seq_len=args.max_seq_len)
+                
+            
             if 'delibot' in args.dataset_name:
-                if 'utt' in args.dataset_name:
-                    new_tokens = ['[PICK]', '[FINISHED]', '<', '[USER_SYS]'] + ['[USER_{}]'.format(str(i)) for i in range(6)]
-                else:
-                    new_tokens = ['[PICK]', '[UTT_BREAK]', '[FINISHED]', '<', '[USER_SYS]'] + ['[USER_{}]'.format(str(i)) for i in range(6)]
-                tokenizer.add_tokens(new_tokens)
-                lm.resize_token_embeddings(len(tokenizer))
-                tokenizer.save_pretrained(os.path.join('datasets', args.dataset_name, 'tokenizer'))
+                if 'tokenizer' in os.listdir(os.path.join('datasets', args.dataset_name)):
+                    print('Loading tokenizer from ' + os.path.join('datasets', args.dataset_name))
+                    tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(os.path.join('datasets', args.dataset_name, 'tokenizer'))
+                    lm.resize_token_embeddings(len(tokenizer))
+                # if 'utt' in args.dataset_name:
+                #     new_tokens = ['[PICK]', '[FINISHED]', '<', '[USER_SYS]'] + ['[USER_{}]'.format(str(i)) for i in range(6)]
+                # else:
+                #     new_tokens = ['[PICK]', '[UTT_BREAK]', '[FINISHED]', '<', '[USER_SYS]'] + ['[USER_{}]'.format(str(i)) for i in range(6)]
+                # tokenizer.add_tokens(new_tokens)
+                # lm.resize_token_embeddings(len(tokenizer))
+                # tokenizer.save_pretrained(os.path.join('datasets', args.dataset_name, 'tokenizer'))
 
     else:
         print("Unsupported model")

@@ -30,7 +30,7 @@ from datasets import concatenate_datasets
 from accelerate import Accelerator, DistributedDataParallelKwargs
 import wandb
 
-import CONSTANTS as CONSTANTS
+#import CONSTANTS as CONSTANTS
 import diffusion.optimizer as optimizer
 import dataset_utils.text_dataset as text_dataset
 from utils.torch_utils import compute_grad_norm
@@ -48,8 +48,10 @@ from latent_models.latent_utils import get_latent_model
 #     'nucleus':
 #     {'max_length':64, 'min_length':5, 'do_sample':True, 'top_p':.95, 'num_beams':1, 'no_repeat_ngram_size':3, 'repetition_penalty':1.2}}
 
-generate_kwargs = {'beam': {'max_length':256, 'do_sample':False, 'num_beams':4, 'no_repeat_ngram_size':3, 'repetition_penalty':1.2},
-                   'nucleus': {'max_length':256, 'do_sample':True, 'top_p':.95, 'num_beams':1, 'no_repeat_ngram_size':3, 'repetition_penalty':1.2}}
+generate_kwargs = {#'beam': {'max_length':64, 'do_sample':False, 'num_beams':4, 'no_repeat_ngram_size':3, 'repetition_penalty':1.2},
+                   #'nucleus': {'max_length':64, 'do_sample':True, 'top_p':.95, 'num_beams':1, 'no_repeat_ngram_size':3, 'repetition_penalty':1.2},
+                   'greedy': {'max_length':64},
+                   'contrastive': {'max_length':64, 'penalty_alpha':0.6, 'top_k':4}}
 
 ModelPrediction =  namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
 
@@ -140,6 +142,8 @@ class Trainer(object):
         self.enc_dec_model = args.enc_dec_model
 
         self.lm, self.tokenizer, config = get_latent_model(args)
+        assert self.lm.lm_head.weight.shape[0] == len(self.tokenizer)
+        print(f'vocab size: {len(self.tokenizer)}')
         num_trainable_params = sum(p.numel() for p in self.lm.parameters() if p.requires_grad)
         if self.accelerator.is_main_process:
             self.accelerator.print(f'num trainable params: {num_trainable_params}')
@@ -208,7 +212,10 @@ class Trainer(object):
             'scaler': self.accelerator.scaler.state_dict() if exists(self.accelerator.scaler) else None
         }
 
+        assert self.lm.lm_head.weight.shape[0] == len(self.tokenizer)
         torch.save(data, str(self.results_folder / f'model.pt'))
+        print(self.results_folder)
+        self.tokenizer.save_pretrained(str(self.results_folder))
 
     def load(self, file_path=None, resume_training=False):
         file_path = Path(file_path) if exists(file_path) else self.results_folder
@@ -248,7 +255,8 @@ class Trainer(object):
                 # Compute generated language
                 if self.num_devices > 1:
                     encoder_outputs = self.lm.module.get_encoder()(input_ids = data['input_ids'], attention_mask = data['attention_mask'])
-                    encoder_outputs = self.lm.module.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
+                    if not self.args.direct_connection:
+                        encoder_outputs = self.lm.module.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
                     
                     loss = self.lm(labels=data['labels'], encoder_outputs=encoder_outputs).loss
                     total_validation_loss += loss.item()
@@ -257,7 +265,8 @@ class Trainer(object):
                     sample_ids = self.lm.module.generate(encoder_outputs=encoder_outputs, **gen_kwargs)
                 else:
                     encoder_outputs = self.lm.get_encoder()(input_ids = data['input_ids'], attention_mask = data['attention_mask'])
-                    encoder_outputs = self.lm.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
+                    if not self.args.direct_connection:
+                        encoder_outputs = self.lm.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
                     
                     #breakpoint()
                     loss = self.lm(labels=data['labels'], encoder_outputs=encoder_outputs).loss
@@ -268,6 +277,7 @@ class Trainer(object):
                 
                 
                 # Pad sample_ids to max_seq_len 
+                print('start_sampling')
                 sample_ids = F.pad(sample_ids, (0, self.max_seq_len - sample_ids.shape[-1]), value=self.tokenizer.pad_token_id)
                 gathered_sample_ids = accelerator.gather(sample_ids).to('cpu')
                 texts_list = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=True).strip() for g in gathered_sample_ids]
@@ -361,10 +371,12 @@ class Trainer(object):
                             encoder_outputs = self.lm.module.get_encoder()(input_ids = data['input_ids'], attention_mask = data['attention_mask'])
                         else:
                             encoder_outputs = self.lm.get_encoder()(input_ids = data['input_ids'], attention_mask = data['attention_mask'])
-                    if self.num_devices > 1:
-                        encoder_outputs = self.lm.module.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
-                    else:
-                        encoder_outputs = self.lm.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
+                    
+                    if not self.args.direct_connection:
+                        if self.num_devices > 1:
+                            encoder_outputs = self.lm.module.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
+                        else:
+                            encoder_outputs = self.lm.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
 
                     loss = self.lm(labels=data['labels'], encoder_outputs=encoder_outputs).loss    
                 #breakpoint() 
@@ -396,10 +408,12 @@ class Trainer(object):
 
                         if self.num_devices > 1:
                             encoder_outputs = self.lm.module.get_encoder()(input_ids = data['input_ids'], attention_mask = data['attention_mask'])
-                            encoder_outputs = self.lm.module.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
+                            if not self.args.direct_connection:
+                                encoder_outputs = self.lm.module.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
                         else:
                             encoder_outputs = self.lm.get_encoder()(input_ids = data['input_ids'], attention_mask = data['attention_mask'])
-                            encoder_outputs = self.lm.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
+                            if not self.args.direct_connection:
+                                encoder_outputs = self.lm.encoder_output_to_decoder_input(encoder_outputs, data['attention_mask'])
                         loss = self.lm(labels=data['labels'], encoder_outputs=encoder_outputs).loss                      
                         if self.args.lm_mode == 'freeze':
                             total_lm_val_loss += self.lm(input_ids = data['input_ids'], attention_mask = data['attention_mask'], labels=data['labels']).loss.item()
