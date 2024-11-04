@@ -40,7 +40,6 @@ def get_latent_model(args):
                     args.enc_dec_model, config=config, num_encoder_latents=args.num_encoder_latents, num_decoder_latents=args.num_decoder_latents, dim_ae=args.dim_ae, num_layers=args.num_layers,
                     l2_normalize_latents=args.l2_normalize_latents, _fast_init=False, max_seq_len=args.max_seq_len)
                 
-            
             if 'delibot' in args.dataset_name:
                 if 'tokenizer' in os.listdir(os.path.join('datasets', args.dataset_name)):
                     print('Loading tokenizer from ' + os.path.join('datasets', args.dataset_name))

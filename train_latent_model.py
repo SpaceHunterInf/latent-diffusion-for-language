@@ -91,6 +91,7 @@ if __name__ == "__main__":
     parser.add_argument("--resume_training", action="store_true", default=False)
     parser.add_argument("--resume_dir", type=str, default=None)
     parser.add_argument("--direct_connection", action='store_true', default=False)
+    parser.add_argument("--dev_mode", action='store_true', default=False)
 
     parser.add_argument("--early_stopping_patience", type=int, default=-1, help="Number of validation epochs before early stopping, -1 means off")
     args = parser.parse_args()
@@ -98,7 +99,7 @@ if __name__ == "__main__":
     os.environ["WANDB_API_KEY"] = 'd2897fab8b1ef5d7affd6fc9f1295f37d78c891f'
 
     wandb.init(
-        project=os.getenv("WANDB_PROJECT", "64_latent_for_64_tokens"),
+        project=os.getenv("WANDB_PROJECT", "enc_dec_512_tokens"),
         name=args.wandb_name if len(args.wandb_name) > 0 else args.data_name,
     )
     if args.eval or args.resume_training:

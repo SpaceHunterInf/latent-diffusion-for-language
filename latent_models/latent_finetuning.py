@@ -50,8 +50,8 @@ from latent_models.latent_utils import get_latent_model
 
 generate_kwargs = {#'beam': {'max_length':64, 'do_sample':False, 'num_beams':4, 'no_repeat_ngram_size':3, 'repetition_penalty':1.2},
                    #'nucleus': {'max_length':64, 'do_sample':True, 'top_p':.95, 'num_beams':1, 'no_repeat_ngram_size':3, 'repetition_penalty':1.2},
-                   'greedy': {'max_length':64},
-                   'contrastive': {'max_length':64, 'penalty_alpha':0.6, 'top_k':4}}
+                   'greedy': {'max_length':64}}
+                   #'contrastive': {'max_length':64, 'penalty_alpha':0.6, 'top_k':4}}
 
 ModelPrediction =  namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
 
@@ -142,7 +142,8 @@ class Trainer(object):
         self.enc_dec_model = args.enc_dec_model
 
         self.lm, self.tokenizer, config = get_latent_model(args)
-        assert self.lm.lm_head.weight.shape[0] == len(self.tokenizer)
+
+        #assert self.lm.lm_head.weight.shape[0] == len(self.tokenizer) this is not necessarily true for T5
         print(f'vocab size: {len(self.tokenizer)}')
         num_trainable_params = sum(p.numel() for p in self.lm.parameters() if p.requires_grad)
         if self.accelerator.is_main_process:
@@ -277,7 +278,7 @@ class Trainer(object):
                 
                 
                 # Pad sample_ids to max_seq_len 
-                print('start_sampling')
+                # print('start_sampling')
                 sample_ids = F.pad(sample_ids, (0, self.max_seq_len - sample_ids.shape[-1]), value=self.tokenizer.pad_token_id)
                 gathered_sample_ids = accelerator.gather(sample_ids).to('cpu')
                 texts_list = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=True).strip() for g in gathered_sample_ids]
@@ -310,11 +311,11 @@ class Trainer(object):
             metrics[f'bart/{strategy}/bleu'] = evaluation.compute_bleu(bart_text[strategy], ref_text)
             # Compute perplexity
 
-            if all(pred_text[strategy]):
-                metrics[f'autoencoder/{strategy}/perplexity'] = evaluation.compute_perplexity(pred_text[strategy])
+            # if all(pred_text[strategy]):
+            #     metrics[f'autoencoder/{strategy}/perplexity'] = evaluation.compute_perplexity(pred_text[strategy])
 
-            if all(bart_text[strategy]):
-                metrics[f'bart/{strategy}/perplexity'] = evaluation.compute_perplexity(bart_text[strategy])
+            # if all(bart_text[strategy]):
+            #     metrics[f'bart/{strategy}/perplexity'] = evaluation.compute_perplexity(bart_text[strategy])
 
             rouge_metrics = evaluation.compute_rouge(pred_text[strategy], ref_text)
             for k,v in rouge_metrics.items():
@@ -322,7 +323,7 @@ class Trainer(object):
             rouge_metrics = evaluation.compute_rouge(bart_text[strategy], ref_text)
             for k,v in rouge_metrics.items():
                 metrics[f'bart/{strategy}/{k}'] = v
-        metrics['reference/perplexity'] = evaluation.compute_perplexity(ref_text)
+        # metrics['reference/perplexity'] = evaluation.compute_perplexity(ref_text)
          
 
         accelerator.log(metrics, self.step)
