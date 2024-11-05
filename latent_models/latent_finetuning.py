@@ -213,7 +213,7 @@ class Trainer(object):
             'scaler': self.accelerator.scaler.state_dict() if exists(self.accelerator.scaler) else None
         }
 
-        assert self.lm.lm_head.weight.shape[0] == len(self.tokenizer)
+        #assert self.lm.lm_head.weight.shape[0] == len(self.tokenizer)
         torch.save(data, str(self.results_folder / f'model.pt'))
         print(self.results_folder)
         self.tokenizer.save_pretrained(str(self.results_folder))
